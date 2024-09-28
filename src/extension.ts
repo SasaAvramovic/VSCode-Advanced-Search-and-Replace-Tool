@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 
 let previousEdits: { [uri: string]: string } = {}; // To store the state for undo
+let retentionData: { fileSearch: string; search: string; replace: string } = { fileSearch: '', search: '', replace: '' }; // To retain input data
 
 export function activate(context: vscode.ExtensionContext) {
     let disposable = vscode.commands.registerCommand('extension.searchReplaceTool', () => {
@@ -29,6 +30,16 @@ export function activate(context: vscode.ExtensionContext) {
                     await undoReplace();
                     vscode.window.showInformationMessage('Undo completed.');
                     break;
+                case 'retain':
+                    retentionData = { fileSearch: message.fileSearch, search: message.search, replace: message.replace };
+                    break;
+            }
+        });
+
+        // Restore input values when the webview gains focus
+        panel.onDidChangeViewState((e) => {
+            if (e.webviewPanel.visible) {
+                panel.webview.postMessage({ command: 'restore', retentionData });
             }
         });
     });
@@ -81,6 +92,19 @@ function getSearchReplaceHtml(): string {
             <div id="results"></div>
             <script>
                 const vscode = acquireVsCodeApi();
+
+                // Store input values when typing
+                function storeInputValues() {
+                    const fileSearch = document.getElementById('fileSearch').value;
+                    const search = document.getElementById('search').value;
+                    const replace = document.getElementById('replace').value;
+                    vscode.postMessage({ command: 'retain', fileSearch, search, replace });
+                }
+
+                document.getElementById('fileSearch').addEventListener('input', storeInputValues);
+                document.getElementById('search').addEventListener('input', storeInputValues);
+                document.getElementById('replace').addEventListener('input', storeInputValues);
+
                 document.getElementById('replaceButton').addEventListener('click', () => {
                     const fileSearch = document.getElementById('fileSearch').value;
                     const search = document.getElementById('search').value;
@@ -92,10 +116,16 @@ function getSearchReplaceHtml(): string {
                     vscode.postMessage({ command: 'undo' });
                 });
 
+                // Restore input values when receiving message
                 window.addEventListener('message', event => {
                     const message = event.data;
                     if (message.command === 'done') {
                         document.getElementById('results').innerText = message.stats;
+                    }
+                    if (message.command === 'restore') {
+                        document.getElementById('fileSearch').value = message.retentionData.fileSearch;
+                        document.getElementById('search').value = message.retentionData.search;
+                        document.getElementById('replace').value = message.retentionData.replace;
                     }
                 });
             </script>
