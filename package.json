@@ -1,8 +1,9 @@
 {
   "name": "search-replace-tool",
-  "displayName": "Search Replace Tool",
+  "displayName": "Advanced Search & Replace Tool",
   "description": "A VSCode tool to search and replace strings within filtered files.",
-  "version": "0.0.1",
+  "version": "1.0.0",
+  "publisher": "SasaAvramovic",
   "engines": {
     "vscode": "^1.93.0"
   },
