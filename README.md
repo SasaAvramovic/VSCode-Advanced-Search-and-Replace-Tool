@@ -1,8 +1,6 @@
 Install the extension in VSCode:
-    download the search-replace-tool-1.0.0.vsix file
-    
-    in VScode go to extensions/install from VSIX
-    
+    download the search-replace-tool-1.0.0.vsix file,
+    in VScode go to extensions/install from VSIX,
     find the file and install
 
 Usage Instructions
