@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
+
+let previousEdits: { [uri: string]: string } = {}; // To store the state for undo
 
 export function activate(context: vscode.ExtensionContext) {
-    // Register the command to open the search/replace tool
     let disposable = vscode.commands.registerCommand('extension.searchReplaceTool', () => {
         const panel = vscode.window.createWebviewPanel(
             'searchReplaceTool',
@@ -12,21 +14,20 @@ export function activate(context: vscode.ExtensionContext) {
             }
         );
 
-        // Initial content with the "Start" button
         panel.webview.html = getInitialHtml();
 
-        // Handle messages from the webview
         panel.webview.onDidReceiveMessage(async (message) => {
             switch (message.command) {
                 case 'start':
                     panel.webview.html = getSearchReplaceHtml();
                     break;
                 case 'replace':
-                    await performReplace(message.fileSearch, message.search, message.replace);
-                    panel.webview.postMessage({ command: 'done', stats: 'Replacement complete!' });
+                    const stats = await performReplace(message.fileSearch, message.search, message.replace);
+                    panel.webview.postMessage({ command: 'done', stats });
                     break;
                 case 'undo':
-                    vscode.window.showInformationMessage('Undo functionality not implemented yet.');
+                    await undoReplace();
+                    vscode.window.showInformationMessage('Undo completed.');
                     break;
             }
         });
@@ -35,7 +36,6 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(disposable);
 }
 
-// Initial HTML content with the Start button
 function getInitialHtml(): string {
     return `
         <!DOCTYPE html>
@@ -59,7 +59,6 @@ function getInitialHtml(): string {
     `;
 }
 
-// HTML content with the 3 input fields
 function getSearchReplaceHtml(): string {
     return `
         <!DOCTYPE html>
@@ -92,35 +91,56 @@ function getSearchReplaceHtml(): string {
                 document.getElementById('undoButton').addEventListener('click', () => {
                     vscode.postMessage({ command: 'undo' });
                 });
+
+                window.addEventListener('message', event => {
+                    const message = event.data;
+                    if (message.command === 'done') {
+                        document.getElementById('results').innerText = message.stats;
+                    }
+                });
             </script>
         </body>
         </html>
     `;
 }
 
-// Function to perform the search/replace
-async function performReplace(fileSearch: string, search: string, replace: string) {
+// Function to determine if a file is likely a binary file
+function isBinaryFile(fileUri: vscode.Uri): boolean {
+    const fileBuffer = fs.readFileSync(fileUri.fsPath);
+    // Check for non-text characters in the first 1 KB
+    const nonTextChars = fileBuffer.toString('binary', 0, 1024).replace(/[\x09\x0A\x0D\x20-\x7E]/g, '');
+    return nonTextChars.length > 0;
+}
+
+// Function to perform the search/replace with statistics
+async function performReplace(fileSearch: string, search: string, replace: string): Promise<string> {
     if (!fileSearch || !search || !replace) {
         vscode.window.showErrorMessage('All fields are required.');
-        return;
+        return 'Error: Missing input fields.';
     }
 
     const allFiles = await vscode.workspace.findFiles('**/*');
     let totalReplacements = 0;
+    let totalFiles = 0;
     const filteredFiles: vscode.Uri[] = [];
 
-    // Filter files based on the file search input
     for (const file of allFiles) {
-        const document = await vscode.workspace.openTextDocument(file);
-        if (document.getText().includes(fileSearch)) {
-            filteredFiles.push(file);
+        if (!isBinaryFile(file)) { // Check if the file is not binary
+            const document = await vscode.workspace.openTextDocument(file);
+            if (document.getText().includes(fileSearch)) {
+                filteredFiles.push(file);
+            }
         }
     }
 
     const edits = new vscode.WorkspaceEdit();
+    previousEdits = {}; // Reset the undo history
+
     for (const documentUri of filteredFiles) {
         const document = await vscode.workspace.openTextDocument(documentUri);
         const fullText = document.getText();
+        previousEdits[documentUri.toString()] = fullText; // Save for undo
+
         const regex = new RegExp(search, 'g');
         const replacedText = fullText.replace(regex, () => {
             totalReplacements++;
@@ -132,8 +152,25 @@ async function performReplace(fileSearch: string, search: string, replace: strin
             document.positionAt(fullText.length)
         );
         edits.replace(document.uri, fullRange, replacedText);
+        totalFiles++;
     }
 
     await vscode.workspace.applyEdit(edits);
-    vscode.window.showInformationMessage(`Replaced ${totalReplacements} occurrence(s) in ${filteredFiles.length} file(s).`);
+    return `Replaced ${totalReplacements} occurrence(s) in ${totalFiles} file(s).`;
+}
+
+// Function to undo the last replace
+async function undoReplace() {
+    const edits = new vscode.WorkspaceEdit();
+    for (const [uri, oldText] of Object.entries(previousEdits)) {
+        const documentUri = vscode.Uri.parse(uri);
+        const document = await vscode.workspace.openTextDocument(documentUri);
+        const fullRange = new vscode.Range(
+            document.positionAt(0),
+            document.positionAt(document.getText().length)
+        );
+        edits.replace(documentUri, fullRange, oldText);
+    }
+    await vscode.workspace.applyEdit(edits);
+    previousEdits = {}; // Clear undo history after applying undo
 }
