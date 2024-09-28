@@ -78,6 +78,43 @@ function getSearchReplaceHtml(): string {
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Search Replace Tool</title>
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    margin: 20px;
+                }
+                label {
+                    display: block;
+                    margin-bottom: 5px;
+                }
+                input {
+                    width: calc(100% - 22px); /* Adjust for padding and borders */
+                    padding: 8px;
+                    margin-bottom: 10px;
+                    border: 1px solid #ccc;
+                    border-radius: 4px;
+                }
+                button {
+                    padding: 10px 15px;
+                    margin-right: 5px;
+                    border: none;
+                    border-radius: 4px;
+                    background-color: #007acc;
+                    color: white;
+                    cursor: pointer;
+                }
+                button:hover {
+                    background-color: #005a9c;
+                }
+                .button-container {
+                    display: flex;
+                    justify-content: space-between;
+                    margin-top: 10px;
+                }
+                #results {
+                    margin-top: 15px;
+                }
+            </style>
         </head>
         <body>
             <h1>Search and Replace Tool</h1>
@@ -87,8 +124,10 @@ function getSearchReplaceHtml(): string {
             <input type="text" id="search" placeholder="Search Text"/><br>
             <label for="replace">Replace With:</label>
             <input type="text" id="replace" placeholder="Replace Text"/><br>
-            <button id="replaceButton">Replace</button><br>
-            <button id="undoButton">Undo</button><br>
+            <div class="button-container">
+                <button id="replaceButton">Replace</button>
+                <button id="undoButton">Undo</button>
+            </div>
             <div id="results"></div>
             <script>
                 const vscode = acquireVsCodeApi();
